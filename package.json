@@ -1,0 +1,23 @@
+{
+  "name": "vscode-secure-code",
+  "version": "0.1.0",
+  "publisher": "vsosh",
+  "engines": { "vscode": "^1.85.0" },
+  "main": "./out/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [{ "type": "webview", "id": "code-anonymizer.view", "name": "Anonymizer" }]
+    }
+
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "20.x",
+    "typescript": "^5.3.3"
+  }
+}
