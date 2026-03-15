@@ -15,7 +15,7 @@ VS Code расширение для обнаружения и анонимиза
 
 - VS Code 1.85.0 или новее
 - [Go](https://go.dev/dl/) - для запуска исходников TruffleHog
-- Node.js 18+
+- Node.js 20+
 - [Ollama](https://ollama.com/download) с локальной моделью, например gpt-oss:20b
 
 ## Установка и запуск
