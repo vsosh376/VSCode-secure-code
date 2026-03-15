@@ -42,7 +42,7 @@ async function ask(prompt: string, text: string) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: 'gpt-oss:20b-cloud',
+            model: 'gpt-oss:20b',
             messages: [
                 { role: 'system', content: prompt },
                 { role: 'user', content: text }
