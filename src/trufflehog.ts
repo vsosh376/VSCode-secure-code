@@ -3,16 +3,35 @@ import { promisify } from 'util';
 import { basename } from 'path';
 import * as os from 'os';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 
 const run = promisify(exec);
 
-export async function scan(dir: string) {
+export async function scan(dir: string, patterns: string[] = [], keywords: string[] = []) {
     const thDir = path.join(__dirname, '..', 'trufflehog-3.92.5');
     const win = os.platform() === 'win32';
 
+    let cfgFlag = '';
+    let tmpFile = '';
+
+    if (patterns.length > 0) {
+        const kws = keywords.length > 0 ? keywords : [''];
+        const yaml = [
+            'detectors:',
+            '  - name: custom',
+            '    keywords:',
+            ...kws.map(k => `      - "${k}"`),
+            '    regex:',
+            ...patterns.map((p, i) => `      p${i}: '${p.replace(/'/g, "''")}'`),
+        ].join('\n') + '\n';
+        tmpFile = path.join(os.tmpdir(), `th_cfg_${Date.now()}.yaml`);
+        await fs.writeFile(tmpFile, yaml, 'utf-8');
+        cfgFlag = `--config="${tmpFile}"`;
+    }
+
     const cmd = win
-        ? `powershell -Command "cd '${thDir}'; go run . filesystem '${dir}' --json"`
-        : `cd "${thDir}" && go run . filesystem "${dir}" --json`;
+        ? `powershell -Command "cd '${thDir}'; go run . filesystem '${dir}' --json ${cfgFlag}"`
+        : `cd "${thDir}" && go run . filesystem "${dir}" --json ${cfgFlag}`;
 
     try {
         const { stdout } = await run(cmd, {
@@ -23,6 +42,8 @@ export async function scan(dir: string) {
     } catch (e: any) {
         if (e.stdout) return parse(e.stdout);
         throw new Error(e.message);
+    } finally {
+        if (tmpFile) fs.unlink(tmpFile).catch(() => {});
     }
 }
 

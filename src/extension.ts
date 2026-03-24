@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { scan } from './trufflehog';
 import { findSecrets } from './model';
 import { hideSecrets, restoreSecrets } from './anon';
@@ -6,6 +8,11 @@ import { getCode } from './collector';
 import { loadMap, saveMap, deleteMap } from './storage';
 
 let dict: any = null;
+
+async function loadConfig() {
+    const data = await fs.readFile(path.join(__dirname, '..', 'config.json'), 'utf-8');
+    return JSON.parse(data);
+}
 
 export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
@@ -73,15 +80,37 @@ async function doEncrypt() {
     if (!dir) return;
 
     try {
-        const s1 = await scan(dir);
-        const code = await getCode();
-        const s2 = await findSecrets(code);
+        const cfg = await loadConfig();
+        const all: any = {};
 
-        const all: any = { ...s1 };
-        for (const [file, list] of Object.entries(s2)) {
-            if (!all[file]) all[file] = [];
-            for (const s of list as string[]) {
-                if (!all[file].includes(s)) all[file].push(s);
+        if (cfg.trufflehog === 1) {
+            const s1 = await scan(dir, cfg.patterns ?? [], cfg.keywords ?? []);
+            for (const [file, list] of Object.entries(s1)) {
+                if (!all[file]) all[file] = [];
+                for (const s of list as string[]) {
+                    if (!all[file].includes(s)) all[file].push(s);
+                }
+            }
+        }
+
+        if (cfg.model === 1) {
+            const code = await getCode();
+            const s2 = await findSecrets(code);
+            for (const [file, list] of Object.entries(s2)) {
+                if (!all[file]) all[file] = [];
+                for (const s of list as string[]) {
+                    if (!(all[file] as string[]).includes(s)) (all[file] as string[]).push(s);
+                }
+            }
+        }
+
+        if (cfg.patterns && cfg.patterns.length > 0) {
+            const s3 = await scanPatterns(cfg.patterns);
+            for (const [file, list] of Object.entries(s3)) {
+                if (!all[file]) all[file] = [];
+                for (const s of list as string[]) {
+                    if (!(all[file] as string[]).includes(s)) (all[file] as string[]).push(s);
+                }
             }
         }
 
@@ -90,6 +119,36 @@ async function doEncrypt() {
         const res = await hideSecrets(all);
         dict = res.map;
     } catch {}
+}
+
+async function scanPatterns(patterns: string[]) {
+    const res: any = {};
+    const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**');
+
+    for (const uri of files) {
+        try {
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const text = doc.getText();
+            const name = uri.fsPath.split('/').pop() || uri.fsPath;
+
+            for (const p of patterns) {
+                const src = p.replace(/\(\?i\)/g, '');
+                const flags = p.includes('(?i)') ? 'gi' : 'g';
+                let rx: RegExp;
+                try {
+                    rx = new RegExp(src, flags);
+                } catch { continue; }
+                let m;
+                while ((m = rx.exec(text)) !== null) {
+                    const val = m[0];
+                    if (!res[name]) res[name] = [];
+                    if (!res[name].includes(val)) res[name].push(val);
+                }
+            }
+        } catch {}
+    }
+
+    return res;
 }
 
 async function doDecrypt() {
